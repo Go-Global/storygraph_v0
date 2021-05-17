@@ -4,6 +4,9 @@ from displaygraphs import Graph, GenericNode
 import networkx as nx
 import datetime
 
+"""
+StoryGraph Model
+"""
 OUTPUT_PATH = "output/"
 class StoryGraph:
     # This class defines a story graph 'soup' of entities and actions
@@ -25,7 +28,7 @@ class StoryGraph:
         token_to_idx = dict()
         for node in self.nodes:
 
-            nodes.append(GenericNode(nodecount, label=node.text, text=str(dict(node.attrs))))
+            nodes.append(GenericNode(nodecount, label=node.title, text=str(dict(node.attrs))))
             token_to_idx[node] = nodecount
             nodecount += 1
 
@@ -65,17 +68,51 @@ def pyviz_to_nx(net):
     G.add_edges_from([(attrs['from'], attrs['to'], attrs) for attrs in net.edges])
     return G
 
+"""
+Node-Related Models
+- Narrative Entities
+- Actual Sources ("Trump's Twitter Account", Donald Trump himself, NYTimes)
+- Actions (Any verb in text basically)
+- Documents (A news article or tweet)
+"""
+# Top level node class
 class Node:
-    def __init__(self, root_token, node_type):
-        self.root_token = root_token
-        self.span = None # Either a span object or a list of tokens. TODO: pick one.
+    def __init__(self, key, title, node_type, attrs=defaultdict(lambda: set())):
+        self.key = key
+        self.title = title
         self.type = node_type
-        self.text = root_token.text
-        self.attrs = defaultdict(lambda: set()) # Attribute dictionary
+        self.attrs = attrs # Attribute dictionary
         
     def __str__(self):
-        return self.text
+        return self.title
     
+# Node for Narrative Entities
+# is of node_type = 'entity', key is a token, and also contains an optional span object for compound nodes
+class Entity(Node):
+    def __init__(self, root_token, attrs=defaultdict(lambda: set())):
+        super().__init__(root_token, root_token.text, "entity", attrs=attrs)
+        self.span = None # Either a span object or a list of tokens. TODO: pick one.
+
+# Node for Narrative Actions
+# is of node_type = 'action', key is a token, and also contains an optional span object for compound nodes
+class Action(Node):
+    def __init__(self, root_token, attrs=defaultdict(lambda: set())):
+        super().__init__(root_token, root_token.text, "action", attrs=attrs)
+        # self.span = None # Either a span object or a list of tokens. TODO: pick one.
+
+
+
+"""
+Edge-Related Models
+- **Contains (Doc → Entity, Doc → Action)
+- **Authored (Source → Doc)
+- **Follows/Likes (Source → Source/Doc) Indicates how sources pay attention to each other / other documents
+- **References (Doc → Source/Doc) Indicates how a document refers to a real world source/person or other document
+- Coreference (Entity → Source/Doc) Much harder. Inferring referents using NLP. Can be used to expand references.
+- Sequence (Action → Action) sequence of actions in the same document
+- Involved (Narrative Entity → Action)
+"""
+# Top level edge class
 class Edge:
     def __init__(self, label, source, dest, timestamp=0):
         self.label = label
@@ -93,3 +130,35 @@ class Edge:
     
     def __str__(self):
         return str((self.label, self.source.text, self.dest.text))
+
+
+class Contains(Edge):
+    # (Doc → Entity, Doc → Action)
+    def __init__(self, source, dest, timestamp=0):
+        assert source.type in ["doc"] and dest.type in ['entity', 'action'], "Failed node type assert for contains edge between {} and {}".format(str(source), str(dest))
+        super().__init__("contains", source, dest, timestamp=timestamp)
+
+class Authored(Edge):
+    # (Source → Doc)
+    def __init__(self, source, dest, timestamp=0):
+        assert source.type in ["source"] and dest.type in ['doc'], "Failed node type assert for contains edge between {} and {}".format(str(source), str(dest))
+        super().__init__("authored", source, dest, timestamp=timestamp)
+
+class Interacts(Edge):
+    # (Source → Source/Doc) Indicates how sources pay attention to each other / other documents
+    def __init__(self, source, dest, timestamp=0):
+        assert source.type in ["source"] and dest.type in ['source', 'doc'], "Failed node type assert for contains edge between {} and {}".format(str(source), str(dest))
+        super().__init__("interacts", source, dest, timestamp=timestamp)
+
+class References(Edge):
+     # (Doc → Source/Doc) Indicates how a document refers to a real world source/person or other document
+     def __init__(self, source, dest, timestamp=0):
+        assert source.type in ["doc"] and dest.type in ['source', 'doc'], "Failed node type assert for contains edge between {} and {}".format(str(source), str(dest))
+        super().__init__("references", source, dest, timestamp=timestamp)
+
+class Involved(Edge):
+     # (Narrative Entity → Action)
+     def __init__(self, source, dest, timestamp=0):
+         # The assert needs work. I have entities referring to each other in the soup extractor
+        assert source.type in ["entity", 'action'] and dest.type in ['action', 'entity'], "Failed node type assert for contains edge between {} and {}".format(str(source), str(dest))
+        super().__init__("involved", source, dest, timestamp=timestamp)

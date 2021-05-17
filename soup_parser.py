@@ -12,8 +12,7 @@ import networkx as nx
 from networkx import write_graphml
 
 from displaygraphs import HierarchalGraph, Graph
-# from prgraph import DocumentNode, HierarchalDocumentNode
-from soup_models import Node, Edge, StoryGraph, pyviz_to_nx
+from soup_models import Node, Entity, Action, Edge, Involved, StoryGraph, pyviz_to_nx
 
 # Combine list dictionaries (for attribute dictionaries)
 def merge_attr_dicts(current, new):
@@ -26,9 +25,9 @@ def merge_attr_dicts(current, new):
 
 
 # Merges compound tokens into the same entity
-def merge_nodes(token_list, entity_dict, node_type="entity"):
+def merge_nodes(token_list, entity_dict):
     assert type(token_list[0]) == spacy.tokens.token.Token, "Error, wrong type passed to node merger" + type(token_list[0])
-    merged_node = Node(token_list[0], node_type)
+    merged_node = Entity(token_list[0])
     merged_node.span = token_list
     if type(token_list) == spacy.tokens.span.Span:
         merged_node.text = token_list.text
@@ -56,7 +55,7 @@ def build_entity_dict(doc):
             entities.append(token)
 
     for token in entities:
-        new_node = Node(token, "entity")
+        new_node = Entity(token)
         for child in token.children:
             if child.dep_ == "det":
                 new_node.attrs["det"].add(child.text)
@@ -92,7 +91,7 @@ def build_action_dict(doc):
         if token.pos_ in ["VERB"]:
             actions.append(token)
     for token in actions:
-        new_node = Node(token, "action")
+        new_node = Action(token)
         # new_node.attrs["type"].append('action')
         for child in token.children:
             if child.dep_ == "det":
@@ -111,7 +110,7 @@ def build_adj_dict(doc):
         if token.pos_ in ["ADV", "ADJ"]:
             adjectives.append(token)
     for token in adjectives:
-        new_node = Node(token, "action")
+        new_node = Node(token, token.text, "action")
         # new_node.attrs["type"].append('action')
         # for child in token.children:
         #     if child.dep_ == "det":
@@ -147,9 +146,10 @@ def get_relations_from_action(action, node_relations, nodes, source=None):
 #             print("relation: ", action.text, nodes[source], nodes[dest])
             if source not in nodes.keys():
                 print("Node {} not found".format(source.text))
-                nodes[source] = Node(source, "entity")
+                nodes[source] = Entity(source)
             
             new_relation = Edge(action.text, nodes[source], nodes[source], action.i * 3600) # Each position equivalent to an hour
+            # new_relation = Involved(action.text, nodes[source], nodes[source], action.i * 3600) # Each position equivalent to an hour
             
             if dest:
                 new_relation.dest = nodes[dest]
@@ -168,7 +168,7 @@ def get_relations_from_action(action, node_relations, nodes, source=None):
                         if grandchild.dep_ in ["pobj", "dobj"]:
                             if grandchild not in nodes.keys():
                                 print("Node {} not found".format(grandchild.text))
-                                nodes[grandchild] = Node(grandchild, "entity")
+                                nodes[grandchild] = Entity(grandchild)
                             if not dest:
                                 new_relation.dest = nodes[grandchild]
                             break
@@ -187,7 +187,7 @@ def get_relations_from_action(action, node_relations, nodes, source=None):
                 
                 # Make sure that dest exists
                 if dest not in nodes.keys():
-                    nodes[dest] = Node(dest, "entity")
+                    nodes[dest] = Entity(dest)
                     print("Node {} not found".format(dest.text))
 
         if new_relation:
@@ -242,7 +242,7 @@ def resolve_coreferences(doc, nodes, node_relations, verbose=True):
     # for name, tokens in references.items():
     #     if len(tokens) == 0:
     #         continue
-    #     nodes[name.text] = Node(tokens[0])
+    #     nodes[name.text] = Entity(tokens[0])
     #     for token in tokens:
     #         node_relations.add(Edge("coreference", nodes[name.text], nodes[token], 0))
             
@@ -405,7 +405,7 @@ def parse_soup(text, raw=False, verbose=True,title="default", model="en_core_web
     token_nodes = dict()
     if raw:
         for token in doc:
-            node = Node(token, "raw")
+            node = Node(token, token.text, "raw")
             node.attrs['pos'] = set([token.pos_])
             token_nodes[token] = node
         node_dict = token_nodes
@@ -432,7 +432,7 @@ def parse_soup(text, raw=False, verbose=True,title="default", model="en_core_web
     else:
         relation_tups = contract_relations(doc, node_dict)
         print(relation_tups)
-        node_relations = set([Edge(label, node_dict[src], node_dict[dest]) for label, src, dest in relation_tups])
+        node_relations = set([Involved(node_dict[src], node_dict[dest]) for label, src, dest in relation_tups])
 
 
     # Use actions as relations
