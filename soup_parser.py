@@ -386,12 +386,11 @@ Outline:
 9. Build parallel story graph contracted along coreferences
 """
 def parse_soup(text, raw=False, verbose=True,title="default", model="en_core_web_sm"):
-    # 1. Setup spacy model
+    # Setup spacy model
     print("Setting up spacy model")
     nlp = spacy.load(model)
     neuralcoref.add_to_pipe(nlp)
 
-    
     # Preprocess text, then feed into spacy
     print("Processing Text")
     text = text.strip()
@@ -400,7 +399,7 @@ def parse_soup(text, raw=False, verbose=True,title="default", model="en_core_web
 #     displacy.render(doc, style='dep', jupyter=True)
      
 
-    # 5. Build nodes from tokens
+    # Build nodes from tokens
     print("Build nodes from parse trees")
     token_nodes = dict()
     if raw:
@@ -422,7 +421,7 @@ def parse_soup(text, raw=False, verbose=True,title="default", model="en_core_web
         for node in nodes:
             print("\t", node.text, dict(node.attrs))
 
-    # 6. Get relations between nodes
+    # Get relations between nodes
     node_relations = set()
     if raw:
         print("Building complete syntactic parse tree")
@@ -459,8 +458,7 @@ def parse_soup(text, raw=False, verbose=True,title="default", model="en_core_web
     
     graph = StoryGraph(title=title)
     
-    graph.node_dict = node_dict
-    graph.read_node_dict()
+    graph.read_node_dict(node_dict)
     # graph.nodes = set([node for _, node in node_dict.items()])
     graph.edges = set(node_relations)
     # return [node for key, node in nodes.items()], node_relations , doc
@@ -490,11 +488,11 @@ hare_sents = tortoise_hare.split(".")
 if __name__ == '__main__':
     # spacy.load('en_core_web_lg')
     # nodes, relations, doc = parse_soup(iron_man.split('.')[0], raw=True, verbose=True)
-    graph, doc = parse_soup(iron_man.split('.')[1], raw=False, verbose=False, title="ironman2", model="en_core_web_sm")
+    graph, doc = parse_soup(iron_man.split('.')[1], raw=True, verbose=False, title="ironman2raw", model="en_core_web_sm")
     # entities, actions, relations, doc = parse_soup(simple_summary)
     # graph = render_story_graph(nodes, relations, graph_name="simplesummary")
     graph.visualize()
-    graph.write_graph_ml()
+    # graph.write_graph_ml()
 
     # nxGraph = pyviz_to_nx(graph)
     # write_graphml(nxGraph, "test.xml")

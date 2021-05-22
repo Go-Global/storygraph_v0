@@ -17,8 +17,14 @@ class StoryGraph:
         self.edges = set() # might change to set
         self.display_graph = None
     
-    def read_node_dict(self):
+    def read_node_dict(self, node_dict):
+        assert type(node_dict) in [dict, defaultdict]
+        self.node_dict = node_dict
         self.nodes = set([node for _, node in self.node_dict.items()])
+
+    def read_edge_set(self, edges):
+        assert type(edges) == set
+        self.edges = edges
 
     def build_display_graph(self):
         print("Building Display Graph")
@@ -71,8 +77,8 @@ def pyviz_to_nx(net):
 """
 Node-Related Models
 - Narrative Entities
-- Actual Sources ("Trump's Twitter Account", Donald Trump himself, NYTimes)
 - Actions (Any verb in text basically)
+- Actual Sources ("Trump's Twitter Account", Donald Trump himself, NYTimes)
 - Documents (A news article or tweet)
 """
 # Top level node class
@@ -87,18 +93,56 @@ class Node:
         return self.title
     
 # Node for Narrative Entities
-# is of node_type = 'entity', key is a token, and also contains an optional span object for compound nodes
+# is of node_type = 'entity', key is a spacy token, and also contains an optional span object for compound nodes
 class Entity(Node):
     def __init__(self, root_token, attrs=defaultdict(lambda: set())):
         super().__init__(root_token, root_token.text, "entity", attrs=attrs)
         self.span = None # Either a span object or a list of tokens. TODO: pick one.
 
 # Node for Narrative Actions
-# is of node_type = 'action', key is a token, and also contains an optional span object for compound nodes
+# is of node_type = 'action', key is a spacy token, and also contains an optional span object for compound nodes
 class Action(Node):
     def __init__(self, root_token, attrs=defaultdict(lambda: set())):
         super().__init__(root_token, root_token.text, "action", attrs=attrs)
         # self.span = None # Either a span object or a list of tokens. TODO: pick one.
+
+# Node for Actual Sources  ("Trump's Twitter Account", Donald Trump himself, NYTimes)
+# is of node_type = 'source', key is a , and also contains an optional span object for compound nodes
+class Source(Node):
+    def __init__(self, url, name, source_type, attrs=defaultdict(lambda: set())):
+        super().__init__(url, name, "source", attrs=attrs)
+        self.source_type = source_type # Twitter account, Journalist, News Outlet, etc.
+        # self.date_processed = date_processed if date_processed else datetime.datetime.now()
+
+    def to_dict(self):
+        output = self.attrs.copy()
+        output['type'] = "source"
+        output['key'] = self.url
+        output['title'] = self.name
+        output['name'] = self.name
+        output['source_type'] = self.source_type
+        # output['date_processed'] = self.date_processed
+        return output
+
+# Node for Documents (A news article or tweet)
+# is of node_type = "document", key is tentatively a url, and also contains an optional span object for compound nodes
+class Document(Node):
+    def __init__(self, key, title, doc_type, attrs=defaultdict(lambda: set()), spacy_doc=None, date_processed=None):
+        super().__init__(key, title, "document", attrs=attrs)
+        self.doc_type = doc_type # tweet, article, etc.
+        self.doc_obj = spacy_doc # Spacy doc object
+        self.date_processed = date_processed if date_processed else datetime.datetime.now()
+
+    def to_dict(self):
+        output = self.attrs.copy()
+        output['type'] = "document"
+        output['key'] = self.key
+        output['title'] = self.title
+        output['doc_type'] = self.doc_type
+        output['doc_obj'] = self.doc_obj
+        output['date_processed'] = self.date_processed
+        return output
+
 
 
 
@@ -135,25 +179,25 @@ class Edge:
 class Contains(Edge):
     # (Doc → Entity, Doc → Action)
     def __init__(self, source, dest, timestamp=0):
-        assert source.type in ["doc"] and dest.type in ['entity', 'action'], "Failed node type assert for contains edge between {} and {}".format(str(source), str(dest))
+        assert source.type in ["document"] and dest.type in ['entity', 'action'], "Failed node type assert for contains edge between {} and {}".format(str(source), str(dest))
         super().__init__("contains", source, dest, timestamp=timestamp)
 
 class Authored(Edge):
     # (Source → Doc)
     def __init__(self, source, dest, timestamp=0):
-        assert source.type in ["source"] and dest.type in ['doc'], "Failed node type assert for contains edge between {} and {}".format(str(source), str(dest))
+        assert source.type in ["source"] and dest.type in ["document"], "Failed node type assert for contains edge between {} and {}".format(str(source), str(dest))
         super().__init__("authored", source, dest, timestamp=timestamp)
 
 class Interacts(Edge):
     # (Source → Source/Doc) Indicates how sources pay attention to each other / other documents
     def __init__(self, source, dest, timestamp=0):
-        assert source.type in ["source"] and dest.type in ['source', 'doc'], "Failed node type assert for contains edge between {} and {}".format(str(source), str(dest))
+        assert source.type in ["source"] and dest.type in ['source', "document"], "Failed node type assert for contains edge between {} and {}".format(str(source), str(dest))
         super().__init__("interacts", source, dest, timestamp=timestamp)
 
 class References(Edge):
      # (Doc → Source/Doc) Indicates how a document refers to a real world source/person or other document
      def __init__(self, source, dest, timestamp=0):
-        assert source.type in ["doc"] and dest.type in ['source', 'doc'], "Failed node type assert for contains edge between {} and {}".format(str(source), str(dest))
+        assert source.type in ["document"] and dest.type in ['source', "document"], "Failed node type assert for contains edge between {} and {}".format(str(source), str(dest))
         super().__init__("references", source, dest, timestamp=timestamp)
 
 class Involved(Edge):
