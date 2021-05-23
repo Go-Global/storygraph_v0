@@ -70,7 +70,7 @@ if __name__ == '__main__':
 
     # Get Users (check if exists in graph database first)
     driver = GraphDBDriver()
-    driver.upload_docs(tweet_nodes)
+    driver.upload_nodes(tweet_nodes)
     driver.close()
 
     # Upload new tweets (check if exists in GraphDB) and users

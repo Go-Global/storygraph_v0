@@ -117,7 +117,7 @@ class Source(Node):
     def to_dict(self):
         output = self.attrs.copy()
         output['type'] = "source"
-        output['key'] = self.url
+        output['key'] = self.key
         output['title'] = self.name
         output['name'] = self.name
         output['source_type'] = self.source_type
@@ -130,8 +130,9 @@ class Document(Node):
     def __init__(self, key, title, doc_type, attrs=defaultdict(lambda: set()), spacy_doc=None, date_processed=None):
         super().__init__(key, title, "document", attrs=attrs)
         self.doc_type = doc_type # tweet, article, etc.
-        self.doc_obj = spacy_doc # Spacy doc object
+        # self.doc_obj = spacy_doc # Spacy doc object-
         self.date_processed = date_processed if date_processed else datetime.datetime.now()
+        self.nlp_processed = False # When a document is processed into entities and actions, this boolean is set to true
 
     def to_dict(self):
         output = self.attrs.copy()
@@ -139,8 +140,9 @@ class Document(Node):
         output['key'] = self.key
         output['title'] = self.title
         output['doc_type'] = self.doc_type
-        output['doc_obj'] = self.doc_obj
+        # output['doc_obj'] = self.doc_obj
         output['date_processed'] = self.date_processed
+        output['nlp_processed'] = self.nlp_processed
         return output
 
 
