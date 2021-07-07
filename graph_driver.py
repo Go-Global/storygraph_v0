@@ -14,7 +14,8 @@ class GraphDBDriver:
         upload_nodes: Upload an iterable of nodes to the database
 
     """
-    def __init__(self, uri=config["LOCAL_GRAPH_URI"], user=config["LOCAL_GRAPH_USER"], password=config["LOCAL_GRAPH_PWD"]):
+    # def __init__(self, uri=config["LOCAL_GRAPH_URI"], user=config["LOCAL_GRAPH_USER"], password=config["LOCAL_GRAPH_PWD"]):
+    def __init__(self, uri=config["REMOTE_GRAPH_URI"], user=config["REMOTE_GRAPH_USER"], password=config["REMOTE_GRAPH_PWD"]):
         try:
             self.driver = GraphDatabase.driver(uri, auth=(user, password))
         except Exception as e:

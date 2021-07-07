@@ -10,6 +10,11 @@ from dotenv import dotenv_values
 
 config = dotenv_values(".env")  # config = {"USER": "foo", "EMAIL": "foo@example.org"}
 
+param_fields = {
+    'user': ["created_at","description","entities","id","location","name","pinned_tweet_id","profile_image_url","protected","public_metrics","url","username","verified","withheld"],
+    'tweet': ["attachments","author_id","context_annotations","conversation_id","created_at","entities","geo","id","in_reply_to_user_id","lang","possibly_sensitive","public_metrics","referenced_tweets","reply_settings","source","text","withheld"],
+}
+
 class TwitterAPI:
     def __init__(self, config):
         self.config = config
@@ -17,65 +22,66 @@ class TwitterAPI:
 
     # Specify the usernames that you want to lookup below
     # You can enter up to 100 comma-separated values.
-    # returns users
-    def query_users(self, user_list, full_data=False):
+    # returns users Rate Limit 300/15mins
+    def query_users(self, user_list, fields=param_fields['user']):#, max_results=100): # TODO: It appears that you cannot set a max results param for this query.
         assert len(user_list) <= 100, "Too many accounts passed in: " + str(len(user_list))
         usernames = "usernames={}".format(",".join(user_list))
         url = "https://api.twitter.com/2/users/by?{}".format(usernames)
-        if full_data:
-            params = self.get_user_params("created_at,description,entities,id,location,name,pinned_tweet_id,profile_image_url,protected,public_metrics,url,username,verified,withheld")
-        else:
-            params = self.get_user_params("id,description,location,name")
+        params = self.get_user_params(fields)
+        # params['max_results'] = max_results
         json_response = self.connect_to_endpoint(url, self.headers, params)
         return json_response
 
-    # returns tweets from user
-    def get_user_tweet_timeline(self, user_id):
+    # returns tweets from user Rate Limit 1500/15mins
+    def get_user_tweet_timeline(self, user_id, fields=param_fields['tweet'], max_results=100):
         url = "https://api.twitter.com/2/users/{}/tweets".format(user_id)
-        params = self.get_tweet_params("created_at")
+        params = self.get_tweet_params(fields)
+        params['max_results'] = max_results
         json_response = self.connect_to_endpoint(url, self.headers, params)
         return json_response
 
-    # returns tweets mentioning user
-    def get_user_mention_timeline(self, user_id):
+    # returns tweets mentioning user. Rate Limit 450/15mins
+    def get_user_mention_timeline(self, user_id, fields=param_fields['tweet'], next_token=None, max_results=100):
         url = "https://api.twitter.com/2/users/{}/mentions".format(user_id)
-        params = self.get_tweet_params("created_at")
+        params = self.get_tweet_params(fields)
+        if next_token:
+            params['pagination_token'] = next_token
+        params['max_results'] = max_results
         json_response = self.connect_to_endpoint(url, self.headers, params)
-        return json_response
+        token = None
+        if 'meta' in json_response.keys() and 'next_token' in json_response['meta'].keys():
+            token = json_response['meta']['next_token']
+        return json_response, token
 
-    # returns users that are followed/following user_id
-    def get_following(self, user_id, full_data=False, next_token=None):
+    # returns users that are followed/following user_id Rate Limit 15/15mins
+    def get_following(self, user_id, fields=param_fields['user'], next_token=None, max_results=100):
         # Replace with user ID below
         # user_id = 2244994945
         url = "https://api.twitter.com/2/users/{}/following".format(user_id)
         headers = self.create_headers()
-        if full_data:
-            params = self.get_user_params("created_at,description,entities,id,location,name,pinned_tweet_id,profile_image_url,protected,public_metrics,url,username,verified,withheld")
-        else:
-            params = self.get_user_params("id,description,location,name")
+        params = self.get_user_params(fields)
+        params['max_results'] = max_results
         if next_token:
             params['pagination_token'] = next_token
         json_response = self.connect_to_endpoint(url, headers, params)
         token = None
-        if 'meta' in json_response.keys():
+        if 'meta' in json_response.keys() and 'next_token' in json_response['meta'].keys():
             token = json_response['meta']['next_token']
         return json_response, token
     
-    # returns users that are followed/following user_id, as well as a pagination token when provided
-    def get_followers(self, user_id, full_data=False, next_token=None):
+    # returns users that are followed/following user_id, as well as a pagination token when provided. Rate Limit 15/15mins
+    def get_followers(self, user_id, fields=param_fields['user'], next_token=None, max_results=100):
         # Replace with user ID below
         # user_id = 2244994945
         url = "https://api.twitter.com/2/users/{}/followers".format(user_id)
         headers = self.create_headers()
-        if full_data:
-            params = self.get_user_params("created_at,description,entities,id,location,name,pinned_tweet_id,profile_image_url,protected,public_metrics,url,username,verified,withheld")
-        else:
-            params = self.get_user_params("id,description,location,name")
+        params = self.get_user_params(fields)
         if next_token:
             params['pagination_token'] = next_token
+        params['max_results'] = max_results
         json_response = self.connect_to_endpoint(url, headers, params)
         token = None
-        if 'meta' in json_response.keys():
+        if 'meta' in json_response.keys() and 'next_token' in json_response['meta'].keys():
             token = json_response['meta']['next_token']
         return json_response, token
 
@@ -89,16 +95,16 @@ class TwitterAPI:
     # in_reply_to_user_id, lang, non_public_metrics, organic_metrics,
     # possibly_sensitive, promoted_metrics, public_metrics, referenced_tweets,
     # source, text, and withheld
-    def get_tweet_params(self, fields):
-        params = {"tweet.fields": fields}
+    def get_tweet_params(self, field_list):
+        params = {"tweet.fields": ",".join(field_list)}
         return params
     
     # User fields are adjustable, options include:
     # created_at, description, entities, id, location, name,
     # pinned_tweet_id, profile_image_url, protected,
     # public_metrics, url, username, verified, and withheld
-    def get_user_params(self, fields):
-        params = {"user.fields": fields}
+    def get_user_params(self, field_list):
+        params = {"user.fields": ",".join(field_list)}
         return params
 
     # Auth
@@ -111,6 +117,9 @@ class TwitterAPI:
         response = requests.request("GET", url, headers=headers, params=params)
         print(response.status_code)
         if response.status_code != 200:
+            # if response.status_code == 427:
+            #     print("Rate limit exceeded: {} {}".format(response.status_code, response.text))
+            #     return
             raise Exception(
                 "Request returned an error: {} {}".format(
                     response.status_code, response.text
@@ -155,18 +164,21 @@ def format_users(users):
     source_nodes = []
     for user in users:
         # Source(key, name, source_type, attrs=defaultdict(lambda: set())):
-
         source = Source(user["id"], user["username"], "twitter-user", attrs=user, date_processed=datetime.datetime.now())
+        source.attrs['json'] = str(user)
         source_nodes.append(source)
     return source_nodes
 
 def format_tweets(tweets):
     doc_nodes = []
-    for tweet_id, tweet in tweets.items():
+    for tweet in tweets:
         # def __init__(self, key, title, doc_type, attrs=defaultdict(lambda: set()), spacy_doc=None, date_processed=None):
-        doc = Document(tweet_id, tweet["full_text"], "tweet", attrs=tweet, date_processed=datetime.datetime.now())
+        doc = Document(tweet['id'], tweet["text"], "tweet", attrs=dict(), date_processed=datetime.datetime.now())
+        doc.set_attrs(tweet)
+        doc.attrs['json'] = str(tweet)
         doc_nodes.append(doc)
     return doc_nodes
+
 
 def get_twitter_nodes():
     tweets = get_tweets()
@@ -180,7 +192,7 @@ def add_twitter_following_to_graph(twitter_api, graph_driver, user_key, max_foll
     next_token = None
     following = []
     for _ in range(max_followers//100):
-        next_following, next_token = twitter.get_following(user_key, full_data=True, next_token=next_token)
+        next_following, next_token = twitter_api.get_following(user_key, full_data=True, next_token=next_token)
         following.extend(next_following['data'])
         if not next_token:
             break
@@ -219,10 +231,22 @@ if __name__ == '__main__':
     rei_json = twitter.query_users(["rei"])['data'][0]
     rei = format_users([rei_json])[0]
     print(rei)
-    print("Getting follower_list")
-    followers = twitter.get_followers(rei.key, full_data=True)
-    print(len(followers))
-    print(followers)
+    print("Getting following_list")
+    following = []
+    next_token = None
+    for i in range(1):
+        next_following, next_token = twitter.get_following(rei.key, full_data=True, next_token=next_token)
+        following.extend(next_following['data'])
+    #     time.sleep(2)
+        if not next_token:
+            break
+    print("Got", len(following), "following accounts")
+    formatted_following = format_users(following)
+    driver = GraphDBDriver()
+    for account in formatted_following:
+        # print(account)
+        add_twitter_following_to_graph(twitter, driver, account.key, max_followers=100, create_nodes=False)
+    # print(following)
     # following = twitter.get_following(rei.key, full_data=True)
 
 
