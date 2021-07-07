@@ -1,10 +1,101 @@
+# TODO: Fix everything. It sucks right now.
+
 import networkx as nx
 from networkx.drawing.nx_agraph import write_dot, graphviz_layout
 from pyvis.network import Network
 import matplotlib.pyplot as plt
 import random
+from models import Node, Edge
+
+OUTPUT_PATH = "output/"
+
+def visualize(nodes, edges, title='Graph'):
+    # Check inputs
+    for node in nodes:
+        assert issubclass(type(node), Node), "Invalid node pass in: " + str(node)
+    for edge in edges:
+        assert issubclass(type(edge), Edge), "Invalid edge pass in: " + str(edge)
+
+    graph = StoryGraph(title=title)
+    graph.add_nodes(nodes)
+    graph.add_edges(edges)
+    graph.visualize()
+
 
 # Story Graph Class
+class StoryGraph:
+    # This class defines a story graph 'soup' of entities and actions
+    def __init__(self, title="Graph"):
+        self.title = title # Title of the storygraph
+        self.node_dict = dict() # dictionary of keys to nodes (for example, spacy tokens -> Nodes)
+        self.nodes = set() # might change to set
+        self.edges = set() # might change to set
+        self.display_graph = None
+    
+    def add_nodes(self, nodes):
+        assert type(nodes) in [dict, list, set]
+        if type(nodes) == dict:
+            self.node_dict = nodes
+            self.nodes = set([node for _, node in self.node_dict.items()])
+        else:
+            for node in nodes:
+                self.node_dict[node.key] = node
+            self.nodes = set(nodes)
+
+    def add_edges(self, edges):
+        assert type(edges) in [set, list]
+        self.edges = set(edges)
+
+    def build_display_graph(self):
+        print("Building Display Graph")
+        self.display_graph = Graph(self.title)
+        nodes = []
+        nodecount = 0
+        token_to_idx = dict()
+        for node in self.nodes:
+
+            nodes.append(GenericNode(nodecount, label=node.title, text=str(dict(node.attrs))))
+            token_to_idx[node.key] = nodecount
+            nodecount += 1
+
+        self.display_graph.addNodes(nodes)
+        
+        edges = [rel.tup() for rel in self.edges]
+        for name, src, dst in edges:
+            if src in token_to_idx.keys() and dst in token_to_idx.keys():
+                self.display_graph.addEdge(token_to_idx[src], token_to_idx[dst], label=name)
+            else:
+                print("Couldn't match relation between", src, dst)
+        # print(token_to_idx)
+        # G.visualize(self.title)
+        # return G.net
+    
+    def write_graph_ml(self):
+        print("Writing graphml to", OUTPUT_PATH + self.title + ".xml")
+        if not self.display_graph:
+            self.build_display_graph()
+        nxGraph = pyviz_to_nx(self.display_graph.net)
+        nx.write_graphml(nxGraph, OUTPUT_PATH + self.title + ".xml")
+
+    def visualize(self):
+        print("Visualizing Graph")
+        # print(self.nodes)
+        # print(self.node_dict)
+        # print(self.edges)
+        
+        if not self.display_graph:
+            self.build_display_graph()
+        self.display_graph.visualize(OUTPUT_PATH + self.title)
+        print("Saved graph at", OUTPUT_PATH + self.title + '.html')
+
+# Helper method
+def pyviz_to_nx(net):
+    G = nx.Graph()
+    G.add_nodes_from([(attrs['id'], attrs) for attrs in net.nodes])
+    G.add_edges_from([(attrs['from'], attrs['to'], attrs) for attrs in net.edges])
+    return G
+
+
 class Graph: 
     def __init__(self, title, directed=True): 
         self.net = Network(directed=directed, heading=title)

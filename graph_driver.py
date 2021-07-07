@@ -1,7 +1,7 @@
 from neo4j import GraphDatabase
 from neo4j.data import Record
 from dotenv import dotenv_values
-from soup_models import *
+from models import *
 from collections import defaultdict
 
 config = dotenv_values(".env")  # config = {"USER": "foo", "EMAIL": "foo@example.org"}
