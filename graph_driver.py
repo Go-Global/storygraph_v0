@@ -1,6 +1,7 @@
 from neo4j import GraphDatabase
+from neo4j.data import Record
 from dotenv import dotenv_values
-from soup_models import Document
+from soup_models import *
 from collections import defaultdict
 
 config = dotenv_values(".env")  # config = {"USER": "foo", "EMAIL": "foo@example.org"}
@@ -13,7 +14,8 @@ class GraphDBDriver:
         upload_nodes: Upload an iterable of nodes to the database
 
     """
-    def __init__(self, uri=config["LOCAL_GRAPH_URI"], user=config["LOCAL_GRAPH_USER"], password=config["LOCAL_GRAPH_PWD"]):
+    # def __init__(self, uri=config["LOCAL_GRAPH_URI"], user=config["LOCAL_GRAPH_USER"], password=config["LOCAL_GRAPH_PWD"]):
+    def __init__(self, uri=config["REMOTE_GRAPH_URI"], user=config["REMOTE_GRAPH_USER"], password=config["REMOTE_GRAPH_PWD"]):
         try:
             self.driver = GraphDatabase.driver(uri, auth=(user, password))
         except Exception as e:
@@ -29,7 +31,7 @@ class GraphDBDriver:
     #     with self.driver.session() as session:
     #         return session.write_transaction(self._create_node, self._node_dict_to_cypher({'type': "Document", 'title': "test1"}))
 
-    # Query Methods
+    # Query Methods (returns a list of neo4j.data.Records)
     def query_node_dict(self, node_dict):
         return self.query("MATCH " + self._node_dict_to_cypher(node_dict) + " RETURN node")
     
@@ -37,6 +39,10 @@ class GraphDBDriver:
 #         print("MATCH (node:{} {{key: \"{}\"}}) RETURN node".format(node.type, node.key))
         return self.query("MATCH (node:{} {{key: \"{}\"}}) RETURN node".format(node.type, node.key))
 
+    def query_edge(self, edge):
+        return self.query("MATCH (a:{} {{key: \"{}\"}})-[edge:{}]->(b:{} {{key: \"{}\"}}) RETURN edge".format(edge.source.type, edge.source.key, edge.label, edge.dest.type, edge.dest.key))
+
+    # Returns a list of neo4j.data.Records
     def query(self, query, db=None):
         assert self.driver, "Driver not initialized!"
         session = None
@@ -49,9 +55,10 @@ class GraphDBDriver:
         finally: 
             if session:
                 session.close()
-        return response
+        return response    
 
     # Upload Methods
+    # Node Methods
     def upload_nodes(self, nodes):
         assert self.driver, "Driver not initialized!"
         with self.driver.session() as session:
@@ -59,6 +66,7 @@ class GraphDBDriver:
             for node in nodes:
                 exists = list(session.run("MATCH (node:{} {{key: \"{}\"}}) RETURN node".format(node.type, node.key)))
                 if len(exists) == 0:
+                    # print("Attempting to upload", node.title, str(node.attrs))
                     # assert type(doc) == Document , "Error: non-Document node passed to doc upload function"
                     ret.append(session.write_transaction(self._create_and_return_node, node.to_dict()))
                     print("Uploaded", ret[-1])
@@ -71,10 +79,38 @@ class GraphDBDriver:
         cypherquery = ["CREATE (node:{})".format(node_dict['type'])]
         for key in node_dict.keys():
             cypherquery.append("SET node.{} = ${}".format(key, key))
-        cypherquery.append("RETURN node.title + ' at ID:' + id(node)")
+        cypherquery.append("RETURN node")
 #         print(" ".join(cypherquery))
         result = tx.run(" ".join(cypherquery), node_dict)
-        return result.single()[0]
+        entry = result.single()        
+        return entry['node'] if entry else None
+
+    # Edges Methods
+    def upload_edges(self, edges):
+        assert self.driver, "Driver not initialized!"
+        with self.driver.session() as session:
+            ret = []
+            for edge in edges:
+                exists = list(session.run("MATCH (a:{} {{key: \"{}\"}})-[edge:{}]->(b:{} {{key: \"{}\"}}) RETURN edge".format(edge.source_type, edge.source_key, edge.label, edge.dest_type, edge.dest_key)))
+                if len(exists) == 0:
+                    # assert type(doc) == Document , "Error: non-Document node passed to doc upload function"
+                    ret.append(session.write_transaction(self._create_and_return_edge, edge.to_dict(), edge.source_key, edge.dest_key))
+                    print("Uploaded", ret[-1])
+                else:
+                    print(str(edge), "already exists in database")
+            return ret
+
+    @staticmethod
+    def _create_and_return_edge(tx, edge_dict, source_key, dest_key):
+        cypherquery = ["MATCH (a), (b)", "WHERE a.key=\"{}\" AND b.key = \"{}\"".format(source_key, dest_key), "CREATE (a)-[edge:{}]->(b)".format(edge_dict['label'])]
+        for key in edge_dict.keys():
+            cypherquery.append("SET edge.{} = ${}".format(key, key))
+        cypherquery.append("RETURN edge")
+#         print(" ".join(cypherquery))
+        result = tx.run(" ".join(cypherquery), edge_dict)
+        # print(result)
+        entry = result.single()        
+        return entry['edge'] if entry else None
 
     # Helper Methods
     """
@@ -91,19 +127,81 @@ class GraphDBDriver:
         end_query = "})"
         return query + props + end_query
 
+    """
+    Converts a returned object to a dictionary of Node or Edge from Soup Models
+    """
+    @staticmethod
+    def record_to_models(record):
+        assert type(record) == Record
+        assert 'node' in record.keys() or 'edge' in record.keys(), "Neither node or edge found in record keys: " + str(record.keys())
+        ret = dict()
+        def node_to_model(node):
+            # print(node)
+            # print(node.keys())
+            if node['type'] == 'entity':
+                return Entity(node['key'], attrs=dict(node))
+            elif node['type'] == 'action':
+                return Action(node['key'], attrs=dict(node))
+            elif node['type'] == 'source':
+                return Source(node['key'], node['name'], node['source_type'], attrs=dict(node), date_processed=node['date_processed'])
+            elif node['type'] == 'document':
+                return Document(node['key'], node['title'], node['doc_type'], attrs=dict(node), date_processed=node['date_processed'])
+            else:
+                print("ERROR: unrecognized node type:", node['type'])
+
+        # Process Node
+        if 'node' in record.keys():
+            assert record['node']['type'] in ['entity', 'action', 'source', 'document'], "Error: unidentified node type " + record['node']['type']
+            node = node_to_model(record['node'])
+            if node:
+                ret['node'] = node
+        
+        # TODO: This part can probably be greatly optimized since I am building two new node objects for every edge
+        # Process Edge
+        if 'edge' in record.keys():
+            assert record['edge']['label'] in ['contains', 'authored', 'interacts', 'references', 'involved'], "Error: unidentified edge type " + record['edge']['label']
+            edge = record['edge']
+            # source, dest = node_to_model(edge.nodes[0]), node_to_model(edge.nodes[1])
+            # if edge['label'] == 'contains':
+            #     ret['edge'] = Contains(source, dest)
+            # elif edge['label'] == 'authored':
+            #     ret['edge'] = Authored(source, dest)
+            # elif edge['label'] == 'interacts':
+            #     ret['edge'] = Interacts(source, dest, edge['interaction_type'])
+            # elif edge['label'] == 'references':
+            #     ret['edge'] = References(source, dest)
+            # elif edge['label'] == 'involved':
+            #     ret['edge'] = Involved(source, dest)
+            ret['edge'] = (edge['label'], edge['source_key'], edge['dest_key'])
+        
+        return ret
+            
+
 if __name__ == "__main__":  
     # greeter = HelloWorldExample("bolt://localhost:7687", "neo4j", "neo4j")
     print("Testing Graph Driver...")
-    driver = GraphDBDriver(config["LOCAL_GRAPH_URI"], config["LOCAL_GRAPH_USER"], config["LOCAL_GRAPH_PWD"])
-    print("Querying all nodes")
-    print(driver.query("MATCH (n) return n"))
-    print("Uploading one node")
-    tweet = Document("test1", "title", "tweet")
-    driver.upload_nodes([tweet])
-    print("Querying single node")
-    print(driver.query_node(tweet))
-    print("Uploading several nodes with pre-existing in database")
-    tweets = [tweet, Document("test2", "title", "tweet"), Document("test3", "title", "tweet")]
-    driver.upload_nodes(tweets)
-    driver.close()
-    print("Finished")
+    driver = GraphDBDriver()
+    ret = driver.query("MATCH (node)-[edge:interacts]->() RETURN node, edge")
+    res = driver.record_to_models(ret[0])
+    print(res)
+    # print("Querying all nodes")
+    # print(driver.query("MATCH (n) return n"))
+    # print("Uploading one node")
+    # tweet1 = Document("tweet1", "title", "tweet")
+    # source = Source("source1", "title", "source")
+    # driver.upload_nodes([tweet1, source])
+    # print("Adding connecting Edge")
+    # edge = Interacts(source, tweet1, "follows")
+    # driver.upload_edges([edge])
+    # # driver.close()
+    
+    # print("Querying single node")
+    # result = driver.query_node(tweet1)
+    # print(result[0]['node'].keys())
+    # result1 = driver.query_edge(edge)
+    # print(result1[0]['edge'].keys())
+    # # print("Uploading several nodes with pre-existing in database")
+    # # tweets = [tweet, Document("test2", "title", "tweet"), Document("test3", "title", "tweet")]
+    # # # driver.upload_nodes(tweets)
+    # driver.close()
+    # print("Finished")
