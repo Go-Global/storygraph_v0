@@ -1,8 +1,7 @@
 from neo4j import GraphDatabase
 from neo4j.data import Record
 from dotenv import dotenv_values
-from models import *
-from collections import defaultdict
+from models import Node, Source, Entity, Action, Document, Authored, Interacts, Contains, References, Involved
 
 config = dotenv_values(".env")  # config = {"USER": "foo", "EMAIL": "foo@example.org"}
 
@@ -12,50 +11,57 @@ class GraphDBDriver:
         query_node_dict: Query database by a node dictionary
         query: makes a direct cypher query
         upload_nodes: Upload an iterable of nodes to the database
+        upload_edges: Upload an iterable of edges to the database
 
     """
-    # def __init__(self, uri=config["LOCAL_GRAPH_URI"], user=config["LOCAL_GRAPH_USER"], password=config["LOCAL_GRAPH_PWD"]):
-    def __init__(self, uri=config["REMOTE_GRAPH_URI"], user=config["REMOTE_GRAPH_USER"], password=config["REMOTE_GRAPH_PWD"]):
+    def __init__(self, remote=False):
+        if remote:
+            uri = config["REMOTE_GRAPH_URI"]
+            user = config["REMOTE_GRAPH_USER"]
+            password = config["REMOTE_GRAPH_PWD"]
+        else:
+            uri = config["LOCAL_GRAPH_URI"]
+            user = config["LOCAL_GRAPH_USER"]
+            password = config["LOCAL_GRAPH_PWD"]
+
         try:
             self.driver = GraphDatabase.driver(uri, auth=(user, password))
         except Exception as e:
+            self.driver = None
             print("Failed to create the driver:", e)
-        # self.driver = GraphDatabase.driver(uri, auth=(user, password))
 
     def close(self):
         if self.driver:
             self.driver.close()
 
-    # def upload_test(self):
-    #     assert self.driver, "Driver not initialized!"
-    #     with self.driver.session() as session:
-    #         return session.write_transaction(self._create_node, self._node_dict_to_cypher({'type': "Document", 'title': "test1"}))
-
     # Query Methods (returns a list of neo4j.data.Records)
     def query_node_dict(self, node_dict):
-        return self.query("MATCH " + self._node_dict_to_cypher(node_dict) + " RETURN node")
+        return self.raw_query("MATCH " + self._node_dict_to_cypher(node_dict) + " RETURN node")
     
     def query_node(self, node):
 #         print("MATCH (node:{} {{key: \"{}\"}}) RETURN node".format(node.type, node.key))
-        return self.query("MATCH (node:{} {{key: \"{}\"}}) RETURN node".format(node.type, node.key))
+        return self.raw_query("MATCH (node:{} {{key: \"{}\"}}) RETURN node".format(node.type, node.key))
 
     def query_edge(self, edge):
-        return self.query("MATCH (a:{} {{key: \"{}\"}})-[edge:{}]->(b:{} {{key: \"{}\"}}) RETURN edge".format(edge.source.type, edge.source.key, edge.label, edge.dest.type, edge.dest.key))
+        return self.raw_query("MATCH (a:{} {{key: \"{}\"}})-[edge:{}]->(b:{} {{key: \"{}\"}}) RETURN edge".format(edge.source.type, edge.source.key, edge.label, edge.dest.type, edge.dest.key))
 
     # Returns a list of neo4j.data.Records
-    def query(self, query, db=None):
+    def raw_query(self, query, parse_node=False):
         assert self.driver, "Driver not initialized!"
         session = None
         response = None
         try: 
-            session = self.driver.session(database=db) if db is not None else self.driver.session() 
+            session = self.driver.session()
             response = list(session.run(query))
         except Exception as e:
             print("Query failed:", e)
         finally: 
             if session:
                 session.close()
-        return response    
+        if parse_node:
+            return [self.record_to_models(record)['node'] for record in response]
+        else:
+            return response    
 
     # Upload Methods
     # Node Methods
@@ -118,7 +124,7 @@ class GraphDBDriver:
     """
     @staticmethod
     def _node_dict_to_cypher(node, name="node"):
-        assert type(node) in [dict, defaultdict]
+        assert type(node) in [dict]
         query = "({}:{} {{".format(name, node['type'])
         properties = []
         for key, value in node.items():
@@ -181,9 +187,8 @@ if __name__ == "__main__":
     # greeter = HelloWorldExample("bolt://localhost:7687", "neo4j", "neo4j")
     print("Testing Graph Driver...")
     driver = GraphDBDriver()
-    ret = driver.query("MATCH (node)-[edge:interacts]->() RETURN node, edge")
-    res = driver.record_to_models(ret[0])
-    print(res)
+    ret = driver.raw_query("MATCH (node)-[edge:interacts]->() RETURN node, edge", parse_node=True)
+    print(ret)
     # print("Querying all nodes")
     # print(driver.query("MATCH (n) return n"))
     # print("Uploading one node")

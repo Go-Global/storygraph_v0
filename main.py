@@ -1,5 +1,6 @@
 from visualization import visualize
 from models import *
+from graph_driver import GraphDBDriver
 
 if __name__ == '__main__':
     # Test graphdb models instantiation
@@ -17,6 +18,8 @@ if __name__ == '__main__':
     # Test visualization
     visualize([stef, main_code, models_code], [coded1, coded2], title='TestGraph')
     
-
-
-    pass
+    # Test graph pull
+    print("Testing Graph Driver...")
+    driver = GraphDBDriver()
+    ret = driver.raw_query("MATCH (node)-[edge:interacts]->() RETURN node, edge LIMIT 10", parse_node=True)
+    print(ret)
