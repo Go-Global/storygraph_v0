@@ -5,9 +5,9 @@ from networkx.drawing.nx_agraph import write_dot, graphviz_layout
 from pyvis.network import Network
 import matplotlib.pyplot as plt
 import random
-from storygraph_v0.models import Node, Edge
+from .models import Node, Edge
 
-OUTPUT_PATH = "output/"
+OUTPUT_PATH = "./output/"
 
 def visualize(nodes, edges, title='Graph'):
     # Check inputs

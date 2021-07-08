@@ -1,6 +1,6 @@
-from visualization import visualize
-from models import *
-from graph_driver import GraphDBDriver
+from .visualization import visualize
+from .models import *
+from .graph_driver import GraphDBDriver
 
 if __name__ == '__main__':
     print("Testing storygraph_v0")

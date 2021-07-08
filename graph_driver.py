@@ -1,7 +1,7 @@
 from neo4j import GraphDatabase
 from neo4j.data import Record
 from dotenv import dotenv_values
-from storygraph_v0.models import Node, Source, Entity, Action, Document, Authored, Interacts, Contains, References, Involved
+from .models import Node, Source, Entity, Action, Document, Authored, Interacts, Contains, References, Involved
 
 config = dotenv_values(".env")  # config = {"USER": "foo", "EMAIL": "foo@example.org"}
 
@@ -46,7 +46,7 @@ class GraphDBDriver:
         return self.raw_query("MATCH (a:{} {{key: \"{}\"}})-[edge:{}]->(b:{} {{key: \"{}\"}}) RETURN edge".format(edge.source.type, edge.source.key, edge.label, edge.dest.type, edge.dest.key))
 
     # Returns a list of neo4j.data.Records
-    def raw_query(self, query, parse_node=False):
+    def raw_query(self, query, parse_nodes=False):
         assert self.driver, "Driver not initialized!"
         session = None
         response = None
@@ -58,7 +58,7 @@ class GraphDBDriver:
         finally: 
             if session:
                 session.close()
-        if parse_node:
+        if parse_nodes:
             return [self.record_to_models(record)['node'] for record in response]
         else:
             return response    
@@ -187,7 +187,7 @@ if __name__ == "__main__":
     # greeter = HelloWorldExample("bolt://localhost:7687", "neo4j", "neo4j")
     print("Testing Graph Driver...")
     driver = GraphDBDriver()
-    ret = driver.raw_query("MATCH (node)-[edge:interacts]->() RETURN node, edge", parse_node=True)
+    ret = driver.raw_query("MATCH (node)-[edge:interacts]->() RETURN node, edge", parse_nodes=True)
     print(ret)
     # print("Querying all nodes")
     # print(driver.query("MATCH (n) return n"))
