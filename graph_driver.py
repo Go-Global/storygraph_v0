@@ -1,7 +1,7 @@
 from neo4j import GraphDatabase
 from neo4j.data import Record
 from dotenv import dotenv_values
-from models import Node, Source, Entity, Action, Document, Authored, Interacts, Contains, References, Involved
+from storygraph_v0.models import Node, Source, Entity, Action, Document, Authored, Interacts, Contains, References, Involved
 
 config = dotenv_values(".env")  # config = {"USER": "foo", "EMAIL": "foo@example.org"}
 
