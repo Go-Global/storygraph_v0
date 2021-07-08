@@ -3,6 +3,7 @@ from models import *
 from graph_driver import GraphDBDriver
 
 if __name__ == '__main__':
+    print("Testing storygraph_v0")
     # Test graphdb models instantiation
     stef = Source('0', 'stef', 'person')
     main_code = Document('1', 'main.py', 'python-file')
