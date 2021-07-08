@@ -1,9 +1,12 @@
+import datetime
+
 from neo4j import GraphDatabase
 from neo4j.data import Record
 from dotenv import dotenv_values
-from .models import Node, Source, Entity, Action, Document, Authored, Interacts, Contains, References, Involved
+from models import Node, Source, Entity, Action, Document, Authored, Interacts, Contains, References, Involved
 
 config = dotenv_values(".env")  # config = {"USER": "foo", "EMAIL": "foo@example.org"}
+assert len(config) > 0, "Error: Cannot read .env file"
 
 class GraphDBDriver:
     """
@@ -63,6 +66,45 @@ class GraphDBDriver:
         else:
             return response    
 
+    # Semi-structured query
+    # Returns a list of neo4j.data.Records
+    def structured_query(self, MATCH=None, WHERE=None, RETURN=None, LIMIT=10, parse_nodes=False):
+        query_arr = []
+        if MATCH:
+            query_arr.append("MATCH " + MATCH)
+        if WHERE:
+            query_arr.append("WHERE " + WHERE)
+        if RETURN:
+            query_arr.append("RETURN " + RETURN)
+        if LIMIT:
+            assert type(LIMIT) is int, "Error: LIMIT param must be an int not " + str(type(LIMIT))
+            query_arr.append("LIMIT " + str(LIMIT))
+        
+        query = "\n".join(query_arr)
+        # print(query)
+        return self.raw_query(query, parse_nodes=parse_nodes)
+        
+    # Formats the 'WHERE' component of a Cypher Query from two datetimes and a target field name
+    # Returns None if both start and end are empty
+    def format_time_range(self, field_name, start=None, end=None):
+        if not start and not end:
+            return None
+        tokens = []
+        if start:
+            assert type(start) is datetime.datetime, "Error: value passed in must be a datetime object"
+            tokens.append("node." + field_name)
+            tokens.append(">= localdatetime(datetime('{}'))".format(start.strftime("%Y-%m-%d")))
+            if end:
+                assert start < end, "Error: Invalid range between {} and {}".format(start, end)
+                tokens.append("AND")
+        if end:
+            assert type(end) is datetime.datetime, "Error: value passed in must be a datetime object"
+            tokens.append("node." + field_name)
+            tokens.append("<= localdatetime(datetime('{}'))".format(end.strftime("%Y-%m-%d")))
+        
+        return " ".join(tokens)
+            
+    
     # Upload Methods
     # Node Methods
     def upload_nodes(self, nodes):
@@ -118,7 +160,7 @@ class GraphDBDriver:
         entry = result.single()        
         return entry['edge'] if entry else None
 
-    # Helper Methods
+    # Helper Methods   
     """
     Converts a node in dictionary form to a cypher create query
     """
@@ -187,7 +229,14 @@ if __name__ == "__main__":
     # greeter = HelloWorldExample("bolt://localhost:7687", "neo4j", "neo4j")
     print("Testing Graph Driver...")
     driver = GraphDBDriver()
-    ret = driver.raw_query("MATCH (node)-[edge:interacts]->() RETURN node, edge", parse_nodes=True)
+    ret = driver.raw_query("MATCH (node)-[edge:interacts]->() RETURN node, edge LIMIT 10", parse_nodes=True)
+    print(ret)
+
+    print("Test date-constrained querying")
+    # print(driver.format_time_range("created_at", start=datetime.datetime(2021, 7, 1), end=datetime.datetime.now()))
+    # print(driver.format_time_range("created_at", start=None, end=datetime.datetime.now()))
+    # print(driver.format_time_range("created_at", start=datetime.datetime.now(), end=None))
+    ret = driver.structured_query(MATCH="(node:document)", WHERE=driver.format_time_range('created_at', end=datetime.datetime.now()), RETURN="node", parse_nodes=True)
     print(ret)
     # print("Querying all nodes")
     # print(driver.query("MATCH (n) return n"))
