@@ -1,11 +1,20 @@
-import datetime
+import datetime, os
 
 from neo4j import GraphDatabase
 from neo4j.data import Record
-from dotenv import dotenv_values
+from dotenv import dotenv_values, load_dotenv
 from .models import Node, Source, Entity, Action, Document, Authored, Interacts, Contains, References, Involved
 
-config = dotenv_values("../.env")  # config = {"USER": "foo", "EMAIL": "foo@example.org"}
+# config = dotenv_values(".env")  # config = {"USER": "foo", "EMAIL": "foo@example.org"}
+load_dotenv()
+config = {
+    'REMOTE_GRAPH_URI': os.getenv('REMOTE_GRAPH_URI'),
+    'REMOTE_GRAPH_USER': os.getenv('REMOTE_GRAPH_USER'),
+    'REMOTE_GRAPH_PWD': os.getenv('REMOTE_GRAPH_PWD'),
+    'LOCAL_GRAPH_URI': os.getenv('LOCAL_GRAPH_URI'),
+    'LOCAL_GRAPH_USER': os.getenv('LOCAL_GRAPH_USER'),
+    'LOCAL_GRAPH_PWD': os.getenv('LOCAL_GRAPH_PWD'),
+}
 assert len(config) > 0, "Error: Cannot read .env file"
 
 class GraphDBDriver:
