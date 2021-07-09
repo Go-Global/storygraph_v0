@@ -21,6 +21,7 @@ if __name__ == '__main__':
     
     # Test graph pull
     print("Testing Graph Driver...")
-    driver = GraphDBDriver()
+    driver = GraphDBDriver(remote=True)
     ret = driver.raw_query("MATCH (node)-[edge:interacts]->() RETURN node, edge LIMIT 10", parse_node=True)
+
     print(ret)
