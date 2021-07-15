@@ -193,16 +193,16 @@ class GraphDBDriver:
         assert 'node' in record.keys() or 'edge' in record.keys(), "Neither node or edge found in record keys: " + str(record.keys())
         ret = dict()
         def node_to_model(node):
-            # print(node)
+            # print(node.id)
             # print(node.keys())
             if node['type'] == 'entity':
                 return Entity(node['key'], attrs=dict(node))
             elif node['type'] == 'action':
                 return Action(node['key'], attrs=dict(node))
             elif node['type'] == 'source':
-                return Source(node['key'], node['name'], node['source_type'], attrs=dict(node), date_processed=node['date_processed'])
+                return Source(node['key'], node['name'], node['source_type'], attrs=dict(node), date_processed=node['date_processed'], db_id=node.id)
             elif node['type'] == 'document':
-                return Document(node['key'], node['title'], node['doc_type'], attrs=dict(node), date_processed=node['date_processed'])
+                return Document(node['key'], node['title'], node['doc_type'], attrs=dict(node), date_processed=node['date_processed'], db_id=node.id)
             else:
                 print("ERROR: unrecognized node type:", node['type'])
 

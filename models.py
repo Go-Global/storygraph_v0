@@ -14,13 +14,14 @@ Node-Related Models
 """
 # Top level node class
 class Node:
-    def __init__(self, key, title, node_type, attrs=dict()):
+    def __init__(self, key, title, node_type, attrs=dict(), db_id=None):
         assert type(key) == str, "Error: key must be a string"
         self.key = key
         self.title = title
         self.type = node_type
         self.attrs = None
         self.set_attrs(attrs) # Attribute dictionary
+        self.db_id = db_id # id from database. Populated when retrieving nodes
         
     def __str__(self):
         return "{}:{}".format(self.title, self.type)
@@ -35,22 +36,22 @@ class Node:
 # Node for Narrative Entities
 # is of node_type = 'entity', key is a spacy token, and also contains an optional span object for compound nodes
 class Entity(Node):
-    def __init__(self, root_token, attrs=dict()):
-        super().__init__(root_token, root_token.text, "entity", attrs=attrs)
+    def __init__(self, root_token, attrs=dict(), db_id=None):
+        super().__init__(root_token, root_token.text, "entity", attrs=attrs, db_id=db_id)
         self.span = None # Either a span object or a list of tokens. TODO: pick one.
 
 # Node for Narrative Actions
 # is of node_type = 'action', key is a spacy token, and also contains an optional span object for compound nodes
 class Action(Node):
-    def __init__(self, root_token, attrs=dict()):
-        super().__init__(root_token, root_token.text, "action", attrs=attrs)
+    def __init__(self, root_token, attrs=dict(), db_id=None):
+        super().__init__(root_token, root_token.text, "action", attrs=attrs, db_id=db_id)
         # self.span = None # Either a span object or a list of tokens. TODO: pick one.
 
 # Node for Actual Sources  ("Trump's Twitter Account", Donald Trump himself, NYTimes)
 # is of node_type = 'source', key is a , and also contains an optional span object for compound nodes
 class Source(Node):
-    def __init__(self, key, name, source_type, attrs=dict(), date_processed=None):
-        super().__init__(key, name, "source", attrs=attrs)
+    def __init__(self, key, name, source_type, attrs=dict(), date_processed=None, db_id=None):
+        super().__init__(key, name, "source", attrs=attrs, db_id=db_id)
         self.source_type = source_type # Twitter account, Journalist, News Outlet, etc.
         self.date_processed = date_processed if date_processed else datetime.datetime.now()
 
@@ -66,8 +67,8 @@ class Source(Node):
 # Node for Documents (A news article or tweet)
 # is of node_type = "document", key is tentatively a url, and also contains an optional span object for compound nodes
 class Document(Node):
-    def __init__(self, key, title, doc_type, attrs=dict(), spacy_doc=None, date_processed=None):
-        super().__init__(key, title, "document", attrs=attrs)
+    def __init__(self, key, title, doc_type, attrs=dict(), spacy_doc=None, date_processed=None, db_id=None):
+        super().__init__(key, title, "document", attrs=attrs, db_id=db_id)
         self.doc_type = doc_type # tweet, article, etc.
         # self.doc_obj = spacy_doc # Spacy doc object-
         self.date_processed = date_processed if date_processed else datetime.datetime.now()
