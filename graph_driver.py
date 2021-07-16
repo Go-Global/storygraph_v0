@@ -3,7 +3,7 @@ import datetime, os
 from neo4j import GraphDatabase
 from neo4j.data import Record
 from dotenv import dotenv_values, load_dotenv
-from .models import Node, Source, Entity, Action, Document, Authored, Interacts, Contains, References, Involved
+from models import Node, Source, Entity, Action, Document, Authored, Interacts, Contains, References, Involved
 
 # config = dotenv_values(".env")  # config = {"USER": "foo", "EMAIL": "foo@example.org"}
 load_dotenv()
@@ -53,6 +53,11 @@ class GraphDBDriver:
     def query_node(self, node):
 #         print("MATCH (node:{} {{key: \"{}\"}}) RETURN node".format(node.type, node.key))
         return self.raw_query("MATCH (node:{} {{key: \"{}\"}}) RETURN node".format(node.type, node.key))
+    
+    def query_nodes_by_id(self, id_list, parse_nodes=False):
+        id_string = ",".join([str(id_) for id_ in id_list])
+        query = 'MATCH (node) WHERE ID(node) in [{}] RETURN node'.format(id_string)
+        return self.raw_query(query, parse_nodes=parse_nodes)    
 
     def query_edge(self, edge):
         return self.raw_query("MATCH (a:{} {{key: \"{}\"}})-[edge:{}]->(b:{} {{key: \"{}\"}}) RETURN edge".format(edge.source.type, edge.source.key, edge.label, edge.dest.type, edge.dest.key))
@@ -232,21 +237,20 @@ class GraphDBDriver:
             ret['edge'] = (edge['label'], edge['source_key'], edge['dest_key'])
         
         return ret
-            
 
 if __name__ == "__main__":  
     # greeter = HelloWorldExample("bolt://localhost:7687", "neo4j", "neo4j")
     print("Testing Graph Driver...")
     driver = GraphDBDriver()
     ret = driver.raw_query("MATCH (node)-[edge:interacts]->() RETURN node, edge LIMIT 10", parse_nodes=True)
-    print(ret)
+    print([str(r) for r in ret])
 
     print("Test date-constrained querying")
     # print(driver.format_time_range("created_at", start=datetime.datetime(2021, 7, 1), end=datetime.datetime.now()))
     # print(driver.format_time_range("created_at", start=None, end=datetime.datetime.now()))
     # print(driver.format_time_range("created_at", start=datetime.datetime.now(), end=None))
     ret = driver.structured_query(MATCH="(node:document)", WHERE=driver.format_time_range('created_at', end=datetime.datetime.now()), RETURN="node", parse_nodes=True)
-    print(ret)
+    print([str(r) for r in ret])
     # print("Querying all nodes")
     # print(driver.query("MATCH (n) return n"))
     # print("Uploading one node")
@@ -266,5 +270,8 @@ if __name__ == "__main__":
     # # print("Uploading several nodes with pre-existing in database")
     # # tweets = [tweet, Document("test2", "title", "tweet"), Document("test3", "title", "tweet")]
     # # # driver.upload_nodes(tweets)
-    # driver.close()
-    # print("Finished")
+    print("Querying nodes by list of DB IDs")
+    nodes_by_id = driver.query_nodes_by_id([1, 2, 3, 4, 5, 6, 7, 10, 550, 1000], parse_nodes=True)
+    print([str(r) for r in nodes_by_id])
+    driver.close()
+    print("Finished")
