@@ -3,7 +3,11 @@ import datetime, os
 from neo4j import GraphDatabase
 from neo4j.data import Record
 from dotenv import dotenv_values, load_dotenv
-from .models import Node, Source, Entity, Action, Document, Authored, Interacts, Contains, References, Involved
+try:
+    from .models import Node, Source, Entity, Action, Document, Authored, Interacts, Contains, References, Involved
+except:
+    print("Import error, assuming module called directly")
+    from models import Node, Source, Entity, Action, Document, Authored, Interacts, Contains, References, Involved
 
 # config = dotenv_values(".env")  # config = {"USER": "foo", "EMAIL": "foo@example.org"}
 load_dotenv()
@@ -47,20 +51,20 @@ class GraphDBDriver:
             self.driver.close()
 
     # Query Methods (returns a list of neo4j.data.Records)
-    def query_node_dict(self, node_dict):
+    def query_node_dict(self, node_dict, parse_nodes=True):
         return self.raw_query("MATCH " + self._node_dict_to_cypher(node_dict) + " RETURN node")
     
-    def query_node(self, node):
+    def query_node(self, node, parse_nodes=True):
 #         print("MATCH (node:{} {{key: \"{}\"}}) RETURN node".format(node.type, node.key))
-        return self.raw_query("MATCH (node:{} {{key: \"{}\"}}) RETURN node".format(node.type, node.key))
+        return self.raw_query("MATCH (node:{} {{key: \"{}\"}}) RETURN node".format(node.type, node.key), parse_nodes=parse_nodes)
     
-    def query_nodes_by_id(self, id_list, parse_nodes=False):
+    def query_nodes_by_id(self, id_list, parse_nodes=True):
         id_string = ",".join([str(id_) for id_ in id_list])
         query = 'MATCH (node) WHERE ID(node) in [{}] RETURN node'.format(id_string)
         return self.raw_query(query, parse_nodes=parse_nodes)    
 
-    def query_edge(self, edge):
-        return self.raw_query("MATCH (a:{} {{key: \"{}\"}})-[edge:{}]->(b:{} {{key: \"{}\"}}) RETURN edge".format(edge.source.type, edge.source.key, edge.label, edge.dest.type, edge.dest.key))
+    def query_edge(self, edge, parse_nodes=False):
+        return self.raw_query("MATCH (a:{} {{key: \"{}\"}})-[edge:{}]->(b:{} {{key: \"{}\"}}) RETURN edge".format(edge.source_type, edge.source_key, edge.label, edge.dest_type, edge.dest_key), parse_nodes=False)
 
     # Returns a list of neo4j.data.Records
     def raw_query(self, query, parse_nodes=False):
@@ -125,15 +129,18 @@ class GraphDBDriver:
         assert self.driver, "Driver not initialized!"
         with self.driver.session() as session:
             ret = []
+            count = 0
             for node in nodes:
                 exists = list(session.run("MATCH (node:{} {{key: \"{}\"}}) RETURN node".format(node.type, node.key)))
                 if len(exists) == 0:
                     # print("Attempting to upload", node.title, str(node.attrs))
                     # assert type(doc) == Document , "Error: non-Document node passed to doc upload function"
                     ret.append(session.write_transaction(self._create_and_return_node, node.to_dict()))
-                    print("Uploaded", ret[-1])
+                    print("Uploaded", node.key)
+                    count += 1
                 else:
                     print(node.key, "already exists in database")
+            print("Uploaded {} nodes out of {} total".format(count, len(nodes)))
             return ret
 
     @staticmethod
@@ -152,14 +159,17 @@ class GraphDBDriver:
         assert self.driver, "Driver not initialized!"
         with self.driver.session() as session:
             ret = []
+            count = 0
             for edge in edges:
                 exists = list(session.run("MATCH (a:{} {{key: \"{}\"}})-[edge:{}]->(b:{} {{key: \"{}\"}}) RETURN edge".format(edge.source_type, edge.source_key, edge.label, edge.dest_type, edge.dest_key)))
                 if len(exists) == 0:
                     # assert type(doc) == Document , "Error: non-Document node passed to doc upload function"
                     ret.append(session.write_transaction(self._create_and_return_edge, edge.to_dict(), edge.source_key, edge.dest_key))
-                    print("Uploaded", ret[-1])
+                    print("Uploaded", str(edge))
+                    count += 1
                 else:
                     print(str(edge), "already exists in database")
+            print("Uploaded {} edges out of {} total".format(count, len(edges)))
             return ret
 
     @staticmethod
@@ -241,7 +251,7 @@ class GraphDBDriver:
 if __name__ == "__main__":  
     # greeter = HelloWorldExample("bolt://localhost:7687", "neo4j", "neo4j")
     print("Testing Graph Driver...")
-    driver = GraphDBDriver()
+    driver = GraphDBDriver(remote=False)
     ret = driver.raw_query("MATCH (node)-[edge:interacts]->() RETURN node, edge LIMIT 10", parse_nodes=True)
     print([str(r) for r in ret])
 
@@ -253,25 +263,30 @@ if __name__ == "__main__":
     print([str(r) for r in ret])
     # print("Querying all nodes")
     # print(driver.query("MATCH (n) return n"))
-    # print("Uploading one node")
-    # tweet1 = Document("tweet1", "title", "tweet")
-    # source = Source("source1", "title", "source")
-    # driver.upload_nodes([tweet1, source])
-    # print("Adding connecting Edge")
-    # edge = Interacts(source, tweet1, "follows")
-    # driver.upload_edges([edge])
-    # # driver.close()
-    
-    # print("Querying single node")
-    # result = driver.query_node(tweet1)
-    # print(result[0]['node'].keys())
-    # result1 = driver.query_edge(edge)
-    # print(result1[0]['edge'].keys())
-    # # print("Uploading several nodes with pre-existing in database")
-    # # tweets = [tweet, Document("test2", "title", "tweet"), Document("test3", "title", "tweet")]
-    # # # driver.upload_nodes(tweets)
+    print("Uploading nodes")
+    tweet1 = Document("test_tweet1", "title", "tweet")
+    source = Source("test_source1", "title", "source")
+    driver.upload_nodes([tweet1, source])
+    print("Adding connecting Edge")
+    edge = Interacts(source, tweet1, "follows")
+    driver.upload_edges([edge])
+        
+    print("Querying single node")
+    result = driver.query_node(tweet1)
+    print(result)
+    result1 = driver.query_edge(edge) # Does not support parsing yet
+    print(result1)
+    print("Uploading several nodes with pre-existing in database")
+    tweets = [tweet1, Document("test2", "title", "tweet"), Document("test3", "title", "tweet")]
+    # driver.upload_nodes(tweets)
     print("Querying nodes by list of DB IDs")
     nodes_by_id = driver.query_nodes_by_id([1, 2, 3, 4, 5, 6, 7, 10, 550, 1000], parse_nodes=True)
     print([str(r) for r in nodes_by_id])
+
+    print("Cleaning up")
+    driver.raw_query("MATCH (n:document) WHERE n.key=\"test_tweet1\" DETACH DELETE n")
+    driver.raw_query("MATCH (n:source) WHERE n.key=\"test_source1\" DETACH DELETE n")
+    print("Deleted nodes")
     driver.close()
     print("Finished")
+    
