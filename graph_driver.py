@@ -79,6 +79,9 @@ class GraphDBDriver:
         finally: 
             if session:
                 session.close()
+        if response is None:
+            print("Warning: nothing returned for query:", query)
+            return None
         if parse_nodes:
             return [self.record_to_models(record)['node'] for record in response]
         else:
