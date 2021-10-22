@@ -44,7 +44,7 @@ class GraphDBDriver:
             self.driver = GraphDatabase.driver(uri, auth=(user, password))
         except Exception as e:
             self.driver = None
-            print("Failed to create the driver:", e)
+            print("Failed to create the driver:", e) # TODO: Sometimes the driver is created succesfully but query fails with Cannot resolve address ___________
 
     def close(self):
         if self.driver:
