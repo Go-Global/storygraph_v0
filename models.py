@@ -48,7 +48,7 @@ class Action(Node):
         # self.span = None # Either a span object or a list of tokens. TODO: pick one.
 
 # Node for Actual Sources  ("Trump's Twitter Account", Donald Trump himself, NYTimes)
-# is of node_type = 'source', key is a , and also contains an optional span object for compound nodes
+# is of node_type = 'source', key is a -
 class Source(Node):
     def __init__(self, key, name, source_type, attrs=dict(), date_processed=None, db_id=None):
         super().__init__(key, name, "source", attrs=attrs, db_id=db_id)
@@ -65,7 +65,7 @@ class Source(Node):
         return output
 
 # Node for Documents (A news article or tweet)
-# is of node_type = "document", key is tentatively a url, and also contains an optional span object for compound nodes
+# is of node_type = "document", key for tweets are its twitter id
 class Document(Node):
     def __init__(self, key, title, doc_type, attrs=dict(), spacy_doc=None, date_processed=None, db_id=None):
         super().__init__(key, title, "document", attrs=attrs, db_id=db_id)
@@ -80,7 +80,7 @@ class Document(Node):
         output['key'] = self.key
         output['title'] = self.title
         output['doc_type'] = self.doc_type
-        # output['doc_obj'] = self.doc_obj
+        output['db_id'] = self.db_id
         output['date_processed'] = self.date_processed
         output['nlp_processed'] = self.nlp_processed
         return output
