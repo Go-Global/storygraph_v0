@@ -4,10 +4,10 @@ from neo4j import GraphDatabase
 from neo4j.data import Record
 from dotenv import dotenv_values, load_dotenv
 try:
-    from .models import Node, Source, Entity, Action, Document, Authored, Interacts, Contains, References, Involved
+    from .models import Node, Entity, Interaction, Attribute, Edge
 except:
     print("Import error, assuming module called directly")
-    from models import Node, Source, Entity, Action, Document, Authored, Interacts, Contains, References, Involved
+    from models import Node, Entity, Interaction, Attribute, Edge
 
 # config = dotenv_values(".env")  # config = {"USER": "foo", "EMAIL": "foo@example.org"}
 load_dotenv()
@@ -255,40 +255,41 @@ if __name__ == "__main__":
     # greeter = HelloWorldExample("bolt://localhost:7687", "neo4j", "neo4j")
     print("Testing Graph Driver...")
     driver = GraphDBDriver(remote=False)
-    ret = driver.raw_query("MATCH (node)-[edge:interacts]->() RETURN node, edge LIMIT 10", parse_nodes=True)
-    print([str(r) for r in ret])
+    # ret = driver.raw_query("MATCH (node)-[edge:interacts]->() RETURN node, edge LIMIT 10", parse_nodes=True)
+    # if ret:
+    #     print([str(r) for r in ret])
 
-    print("Test date-constrained querying")
-    # print(driver.format_time_range("created_at", start=datetime.datetime(2021, 7, 1), end=datetime.datetime.now()))
-    # print(driver.format_time_range("created_at", start=None, end=datetime.datetime.now()))
-    # print(driver.format_time_range("created_at", start=datetime.datetime.now(), end=None))
-    ret = driver.structured_query(MATCH="(node:document)", WHERE=driver.format_time_range('created_at', end=datetime.datetime.now()), RETURN="node", parse_nodes=True)
-    print([str(r) for r in ret])
+    # print("Test date-constrained querying")
+    # # print(driver.format_time_range("created_at", start=datetime.datetime(2021, 7, 1), end=datetime.datetime.now()))
+    # # print(driver.format_time_range("created_at", start=None, end=datetime.datetime.now()))
+    # # print(driver.format_time_range("created_at", start=datetime.datetime.now(), end=None))
+    # ret = driver.structured_query(MATCH="(node:document)", WHERE=driver.format_time_range('created_at', end=datetime.datetime.now()), RETURN="node", parse_nodes=True)
+    # print([str(r) for r in ret])
     # print("Querying all nodes")
     # print(driver.query("MATCH (n) return n"))
     print("Uploading nodes")
-    tweet1 = Document("test_tweet1", "title", "tweet")
-    source = Source("test_source1", "title", "source")
-    driver.upload_nodes([tweet1, source])
+    ent1 = Entity("entity1")
+    action1 = Interaction("interacted")
+    driver.upload_nodes([ent1, action1])
     print("Adding connecting Edge")
-    edge = Interacts(source, tweet1, "follows")
+    edge = Edge("did", ent1, action1,)
     driver.upload_edges([edge])
         
     print("Querying single node")
-    result = driver.query_node(tweet1)
+    result = driver.query_node(ent1)
     print(result)
     result1 = driver.query_edge(edge) # Does not support parsing yet
     print(result1)
-    print("Uploading several nodes with pre-existing in database")
-    tweets = [tweet1, Document("test2", "title", "tweet"), Document("test3", "title", "tweet")]
-    # driver.upload_nodes(tweets)
-    print("Querying nodes by list of DB IDs")
-    nodes_by_id = driver.query_nodes_by_id([1, 2, 3, 4, 5, 6, 7, 10, 550, 1000], parse_nodes=True)
-    print([str(r) for r in nodes_by_id])
+    # print("Uploading several nodes with pre-existing in database")
+    # tweets = [tweet1, Document("test2", "title", "tweet"), Document("test3", "title", "tweet")]
+    # # driver.upload_nodes(tweets)
+    # print("Querying nodes by list of DB IDs")
+    # nodes_by_id = driver.query_nodes_by_id([1, 2, 3, 4, 5, 6, 7, 10, 550, 1000], parse_nodes=True)
+    # print([str(r) for r in nodes_by_id])
 
     print("Cleaning up")
-    driver.raw_query("MATCH (n:document) WHERE n.key=\"test_tweet1\" DETACH DELETE n")
-    driver.raw_query("MATCH (n:source) WHERE n.key=\"test_source1\" DETACH DELETE n")
+    driver.raw_query("MATCH (n:entity) WHERE n.key=\"entity1\" DETACH DELETE n")
+    driver.raw_query("MATCH (n:interaction) WHERE n.key=\"interacted\" DETACH DELETE n")
     print("Deleted nodes")
     driver.close()
     print("Finished")

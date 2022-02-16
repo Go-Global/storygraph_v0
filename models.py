@@ -21,6 +21,7 @@ class Node:
         self.attrs = None
         self.set_attrs(attrs) # Attribute dictionary
         self.db_id = db_id # id from database. Populated when retrieving nodes
+        self.parent_doc = None
         
     def __str__(self):
         return "{}:{}".format(self.title, self.type)
@@ -32,33 +33,37 @@ class Node:
             assert type(value) in primitives, "type " + str(type(value)) + " not supported by neo4j"
         self.attrs = attrs
     
-# Node for Entities
-# is of node_type = 'entity', key is the text
-class Entity(Node):
-    def __init__(self, text, attrs=dict(), db_id=None):
-        super().__init__(text, text, "entity", attrs=attrs, db_id=db_id)
-
-# Node for Interactions
-# is of node_type = 'interaction', key is text
-class Interaction(Node):
-    def __init__(self, text, attrs=dict(), db_id=None):
-        super().__init__(text, text, "interaction", attrs=attrs, db_id=db_id)
-        
-
-# Node for Attribute (A news article or tweet)
-# is of node_type = "document", key for tweets are its twitter id
-class Attribute(Node):
-    def __init__(self, text, text, doc_type, attrs=dict(), db_id=None):
-        super().__init__(text, text, "attribute", attrs=attrs, db_id=db_id)
-
-
     def to_dict(self):
         output = self.attrs.copy()
-        output['type'] = "document"
+        output['type'] = self.type
         output['key'] = self.key
         output['title'] = self.title
         output['db_id'] = self.db_id
+        if self.parent_doc:
+            output['parent_doc'] = self.parent_doc
         return output
+    
+# Node for Entities
+# is of node_type = 'entity', key is the text
+class Entity(Node):
+    def __init__(self, text, parent_doc, attrs=dict(), db_id=None):
+        super().__init__(text, text, "entity", attrs=attrs, db_id=db_id)
+        self.parent_doc = parent_doc
+    
+# Node for Interactions
+# is of node_type = 'interaction', key is text
+class Interaction(Node):
+    def __init__(self, text, parent_doc, attrs=dict(), db_id=None):
+        super().__init__(text, text, "interaction", attrs=attrs, db_id=db_id)
+        self.parent_doc = parent_doc
+
+
+# Node for Attribute 
+# is of node_type = "attribute", key is text
+class Attribute(Node):
+    def __init__(self, text, parent_doc, attrs=dict(), db_id=None):
+        super().__init__(text, text, "attribute", attrs=attrs, db_id=db_id)
+        self.parent_doc = parent_doc
 
 
 """
