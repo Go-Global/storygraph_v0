@@ -40,6 +40,7 @@ class Node:
         output['key'] = self.key
         output['title'] = self.title
         output['db_id'] = self.db_id
+        output['raw_count'] = self.raw_count
         if self.parent_doc:
             output['parent_doc'] = self.parent_doc
         return output
@@ -106,6 +107,7 @@ class Edge:
         output['source_type'] = self.source_type
         output['dest_key'] = self.dest_key
         output['dest_type'] = self.dest_type
+        output['raw_count'] = self.raw_count
         return output
     
     def set_attrs(self, attrs):
