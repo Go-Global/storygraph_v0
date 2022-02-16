@@ -6,11 +6,10 @@ primitives = set([int, float, bool, datetime.datetime, str, list, neo4j.time.Dat
 OUTPUT_PATH = "output/"
 
 """
-Node-Related Models
-- Narrative Entities
-- Actions (Any verb in text basically)
-- Actual Sources ("Trump's Twitter Account", Donald Trump himself, NYTimes)
-- Documents (A news article or tweet)
+Node Models (2/13/2022)
+- Entities
+- Interactions
+- Attributes
 """
 # Top level node class
 class Node:
@@ -22,6 +21,7 @@ class Node:
         self.attrs = None
         self.set_attrs(attrs) # Attribute dictionary
         self.db_id = db_id # id from database. Populated when retrieving nodes
+        self.parent_doc = None
         
     def __str__(self):
         return "{}:{}".format(self.title, self.type)
@@ -33,68 +33,42 @@ class Node:
             assert type(value) in primitives, "type " + str(type(value)) + " not supported by neo4j"
         self.attrs = attrs
     
-# Node for Narrative Entities
-# is of node_type = 'entity', key is a spacy token, and also contains an optional span object for compound nodes
-class Entity(Node):
-    def __init__(self, root_token, attrs=dict(), db_id=None):
-        super().__init__(root_token, root_token.text, "entity", attrs=attrs, db_id=db_id)
-        self.span = None # Either a span object or a list of tokens. TODO: pick one.
-
-# Node for Narrative Actions
-# is of node_type = 'action', key is a spacy token, and also contains an optional span object for compound nodes
-class Action(Node):
-    def __init__(self, root_token, attrs=dict(), db_id=None):
-        super().__init__(root_token, root_token.text, "action", attrs=attrs, db_id=db_id)
-        # self.span = None # Either a span object or a list of tokens. TODO: pick one.
-
-# Node for Actual Sources  ("Trump's Twitter Account", Donald Trump himself, NYTimes)
-# is of node_type = 'source', key is a -
-class Source(Node):
-    def __init__(self, key, name, source_type, attrs=dict(), date_processed=None, db_id=None):
-        super().__init__(key, name, "source", attrs=attrs, db_id=db_id)
-        self.source_type = source_type # Twitter account, Journalist, News Outlet, etc.
-        self.date_processed = date_processed if date_processed else datetime.datetime.now()
-
     def to_dict(self):
         output = self.attrs.copy()
-        output['type'] = "source"
-        output['key'] = self.key
-        output['name'] = self.title
-        output['source_type'] = self.source_type
-        # output['date_processed'] = self.date_processed
-        return output
-
-# Node for Documents (A news article or tweet)
-# is of node_type = "document", key for tweets are its twitter id
-class Document(Node):
-    def __init__(self, key, title, doc_type, attrs=dict(), spacy_doc=None, date_processed=None, db_id=None):
-        super().__init__(key, title, "document", attrs=attrs, db_id=db_id)
-        self.doc_type = doc_type # tweet, article, etc.
-        # self.doc_obj = spacy_doc # Spacy doc object-
-        self.date_processed = date_processed if date_processed else datetime.datetime.now()
-        self.nlp_processed = False # When a document is processed into entities and actions, this boolean is set to true
-
-    def to_dict(self):
-        output = self.attrs.copy()
-        output['type'] = "document"
+        output['type'] = self.type
         output['key'] = self.key
         output['title'] = self.title
-        output['doc_type'] = self.doc_type
         output['db_id'] = self.db_id
-        output['date_processed'] = self.date_processed
-        output['nlp_processed'] = self.nlp_processed
+        if self.parent_doc:
+            output['parent_doc'] = self.parent_doc
         return output
+    
+# Node for Entities
+# is of node_type = 'entity', key is the text
+class Entity(Node):
+    def __init__(self, text, parent_doc, attrs=dict(), db_id=None):
+        super().__init__(text, text, "entity", attrs=attrs, db_id=db_id)
+        self.parent_doc = parent_doc
+    
+# Node for Interactions
+# is of node_type = 'interaction', key is text
+class Interaction(Node):
+    def __init__(self, text, parent_doc, attrs=dict(), db_id=None):
+        super().__init__(text, text, "interaction", attrs=attrs, db_id=db_id)
+        self.parent_doc = parent_doc
+
+
+# Node for Attribute 
+# is of node_type = "attribute", key is text
+class Attribute(Node):
+    def __init__(self, text, parent_doc, attrs=dict(), db_id=None):
+        super().__init__(text, text, "attribute", attrs=attrs, db_id=db_id)
+        self.parent_doc = parent_doc
 
 
 """
 Edge-Related Models
-- **Contains (Doc → Entity, Doc → Action)
-- **Authored (Source → Doc)
-- **Interacts Follows/Likes (Source → Source/Doc) Indicates how sources pay attention to each other / other documents
-- **References (Doc → Source/Doc) Indicates how a document refers to a real world source/person or other document
-- Coreference (Entity → Source/Doc) Much harder. Inferring referents using NLP. Can be used to expand references.
-- Sequence (Action → Action) sequence of actions in the same document
-- Involved (Narrative Entity → Action)
+
 """
 # Top level edge class
 # For source & dest, you can either pass in a Node object or tuple of (key, type)
@@ -118,9 +92,6 @@ class Edge:
     def tup(self):
         return self.label, self.source_key, self.dest_key
     
-#     def __iter__(self):
-#         return iter()
-    
     def __str__(self):
         return str((self.label, str(self.source_key), str(self.dest_key)))
 
@@ -139,39 +110,6 @@ class Edge:
             assert type(key) in primitives, "type " + str(type(key)) + " not supported by neo4j"
             assert type(value) in primitives, "type " + str(type(value)) + " not supported by neo4j"
         self.attrs = attrs
-
-
-class Contains(Edge):
-    # (Doc → Entity, Doc → Action)
-    def __init__(self, source, dest, timestamp=0):
-        super().__init__("contains", source, dest, timestamp=timestamp)
-        assert self.source_type in ["document"] and self.dest_type in ['entity', 'action'], "Failed node type assert for contains edge between {} and {}".format(str(source), str(dest))
-
-class Authored(Edge):
-    # (Source → Doc)
-    def __init__(self, source, dest, timestamp=0):
-        super().__init__("authored", source, dest, timestamp=timestamp)
-        assert self.source_type in ["source"] and self.dest_type in ['document'], "Failed node type assert for authored edge between {} and {}".format(str(source), str(dest))
-
-class Interacts(Edge):
-    # (Source → Source/Doc) Indicates how sources pay attention to each other / other documents
-    def __init__(self, source, dest, interaction_type, timestamp=0):
-        super().__init__("interacts", source, dest, timestamp=timestamp)
-        assert self.source_type in ["source"] and self.dest_type in ['source','document'], "Failed node type assert for interacts edge between {} and {}".format(str(source), str(dest))
-        self.attrs['interaction_type'] = interaction_type
-
-class References(Edge):
-     # (Doc → Source/Doc) Indicates how a document refers to a real world source/person or other document
-     def __init__(self, source, dest, timestamp=0):
-        super().__init__("references", source, dest, timestamp=timestamp)
-        assert self.source_type in ["document"] and self.dest_type in ['source', 'document'], "Failed node type assert for references edge between {} and {}".format(str(source), str(dest))
-
-class Involved(Edge):
-     # (Narrative Entity → Action)
-     def __init__(self, source, dest, timestamp=0):
-         # The assert needs work. I have entities referring to each other in the soup extractor
-        super().__init__("involved", source, dest, timestamp=timestamp)
-        assert self.source_type in ["entity", 'action'] and self.dest_type in ['action', 'entity'], "Failed node type assert for involved edge between {} and {}".format(str(source), str(dest))
 
 # Helper Methods
 def flatten_json(y):
