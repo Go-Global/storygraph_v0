@@ -48,23 +48,23 @@ class Node:
 # Node for Entities
 # is of node_type = 'entity', key is the text
 class Entity(Node):
-    def __init__(self, text, parent_doc, attrs=dict(), db_id=None):
-        super().__init__(text, text, "entity", attrs=attrs, db_id=db_id)
+    def __init__(self, key, text, parent_doc, attrs=dict(), db_id=None):
+        super().__init__(key, text, "entity", attrs=attrs, db_id=db_id)
         self.parent_doc = parent_doc
     
 # Node for Interactions
 # is of node_type = 'interaction', key is text
 class Interaction(Node):
-    def __init__(self, text, parent_doc, attrs=dict(), db_id=None):
-        super().__init__(text, text, "interaction", attrs=attrs, db_id=db_id)
+    def __init__(self, key, text, parent_doc, attrs=dict(), db_id=None):
+        super().__init__(key, text, "interaction", attrs=attrs, db_id=db_id)
         self.parent_doc = parent_doc
 
 
 # Node for Attribute 
 # is of node_type = "attribute", key is text
 class Attribute(Node):
-    def __init__(self, text, parent_doc, attrs=dict(), db_id=None):
-        super().__init__(text, text, "attribute", attrs=attrs, db_id=db_id)
+    def __init__(self, key, text, parent_doc, attrs=dict(), db_id=None):
+        super().__init__(key, text, "attribute", attrs=attrs, db_id=db_id)
         self.parent_doc = parent_doc
 
 
